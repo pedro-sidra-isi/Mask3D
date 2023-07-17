@@ -16,23 +16,31 @@ RUN bash Mambaforge.sh -b -p "${HOME}/conda" \
   && conda init bash
 
 RUN conda install mamba -c conda-forge
-RUN mamba install python==3.11
-RUN mamba install openblas-devel -c anaconda
-
-
-RUN pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu116
-RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-1.13.1+cu116.html
-
-RUN pip install ninja==1.10.2.3
-RUN pip install pytorch-lightning fire imageio tqdm wandb python-dotenv pyviz3d scipy plyfile scikit-learn trimesh loguru albumentations volumentations
-
-RUN pip install antlr4-python3-runtime==4.8
-RUN pip install black==21.4b2
-RUN pip install omegaconf==2.0.6 hydra-core==1.0.5 --no-deps
-RUN pip install 'git+https://github.com/facebookresearch/detectron2.git@710e7795d0eeadf9def0e7ef957eea13532e34cf' --no-deps
 
 COPY . /Mask3D
 WORKDIR /Mask3D
 
-RUN cd /Mask3D/third_party/pointnet2 && python setup.py install
+ENV TORCH_CUDA_ARCH_LIST="6.0 6.1 6.2 7.0 7.2 7.5 8.0 8.6"
 
+RUN mamba env create -f environment.yml
+
+SHELL ["/bin/bash", "-c", "conda", "activate", "mask3d_cuda113", "-c"]
+
+RUN pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
+RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-1.12.1+cu113.html
+RUN pip install 'git+https://github.com/facebookresearch/detectron2.git@710e7795d0eeadf9def0e7ef957eea13532e34cf' --no-deps
+
+WORKDIR /Mask3D/third_party
+
+RUN git clone --recursive "https://github.com/NVIDIA/MinkowskiEngine" && \
+    cd MinkowskiEngine && \
+    git checkout 02fc608bea4c0549b0a7b00ca1bf15dee4a0b228 && \
+    python setup.py install --force_cuda --blas=openblas
+
+RUN git clone https://github.com/ScanNet/ScanNet.git &&\
+    cd ScanNet/Segmentator &&\
+    git checkout 3e5726500896748521a6ceb81271b0f5b2c0e7d2 &&\
+    make
+RUN cd pointnet2 && python setup.py install
+
+RUN pip install pytorch-lightning==1.7.2
